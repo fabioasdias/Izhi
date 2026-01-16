@@ -29,6 +29,7 @@ export interface PersonTotal {
   total: number;
   prsCommented: number;
   avgPerPR: number;
+  stdDevPerPR: number;
 }
 
 export interface PRMergedByPerson {

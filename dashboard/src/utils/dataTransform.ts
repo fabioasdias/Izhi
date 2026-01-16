@@ -17,6 +17,13 @@ function matchesUser(person: string, selectedUser: string | null): boolean {
   return person === selectedUser;
 }
 
+function calculateStdDev(values: number[], mean: number): number {
+  if (values.length < 2) return 0;
+  const squaredDiffs = values.map(v => Math.pow(v - mean, 2));
+  const variance = squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
+  return Math.round(Math.sqrt(variance) * 10) / 10;
+}
+
 export function getUniqueUsers(
   report: CommentReport,
   excludeBots: boolean = true
@@ -43,7 +50,7 @@ export function getPersonTotals(
   dateRange: FilterDateRange | null = null,
   selectedUser: string | null = null
 ): PersonTotal[] {
-  const personStats = new Map<string, { comments: number; prs: Set<string> }>();
+  const personStats = new Map<string, { comments: number; commentsPerPR: Map<string, number> }>();
 
   for (const [repo, prs] of Object.entries(report.repositories)) {
     if (selectedRepo && repo !== selectedRepo) continue;
@@ -55,21 +62,28 @@ export function getPersonTotals(
         if (!matchesUser(event.person, selectedUser)) continue;
 
         const prKey = `${repo}#${pr.number}`;
-        const stats = personStats.get(event.person) ?? { comments: 0, prs: new Set() };
+        const stats = personStats.get(event.person) ?? { comments: 0, commentsPerPR: new Map() };
         stats.comments += 1;
-        stats.prs.add(prKey);
+        stats.commentsPerPR.set(prKey, (stats.commentsPerPR.get(prKey) ?? 0) + 1);
         personStats.set(event.person, stats);
       }
     }
   }
 
   const entries = Array.from(personStats.entries())
-    .map(([name, stats]) => ({
-      name,
-      total: stats.comments,
-      prsCommented: stats.prs.size,
-      avgPerPR: stats.prs.size > 0 ? Math.round((stats.comments / stats.prs.size) * 10) / 10 : 0,
-    }))
+    .map(([name, stats]) => {
+      const prsCommented = stats.commentsPerPR.size;
+      const avgPerPR = prsCommented > 0 ? Math.round((stats.comments / prsCommented) * 10) / 10 : 0;
+      const commentsPerPRValues = Array.from(stats.commentsPerPR.values());
+      const stdDevPerPR = calculateStdDev(commentsPerPRValues, avgPerPR);
+      return {
+        name,
+        total: stats.comments,
+        prsCommented,
+        avgPerPR,
+        stdDevPerPR,
+      };
+    })
     .sort((a, b) => b.total - a.total)
     .slice(0, limit);
 
@@ -194,7 +208,9 @@ export function getPRsByRepo(
 export interface RepoTimeStats {
   repo: string;
   avgTimeToComment: number | null;  // hours
+  stdDevTimeToComment: number | null;
   avgTimeToClose: number | null;    // hours
+  stdDevTimeToClose: number | null;
 }
 
 export function getRepoTimeStats(
@@ -240,12 +256,21 @@ export function getRepoTimeStats(
     const avgComment = timeToComments.length > 0
       ? Math.round((timeToComments.reduce((a, b) => a + b, 0) / timeToComments.length) * 10) / 10
       : null;
+    const stdDevComment = avgComment !== null ? calculateStdDev(timeToComments, avgComment) : null;
+
     const avgClose = timeToClose.length > 0
       ? Math.round((timeToClose.reduce((a, b) => a + b, 0) / timeToClose.length) * 10) / 10
       : null;
+    const stdDevClose = avgClose !== null ? calculateStdDev(timeToClose, avgClose) : null;
 
     if (avgComment !== null || avgClose !== null) {
-      stats.push({ repo, avgTimeToComment: avgComment, avgTimeToClose: avgClose });
+      stats.push({
+        repo,
+        avgTimeToComment: avgComment,
+        stdDevTimeToComment: stdDevComment,
+        avgTimeToClose: avgClose,
+        stdDevTimeToClose: stdDevClose,
+      });
     }
   }
 

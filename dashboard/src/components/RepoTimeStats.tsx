@@ -6,6 +6,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ErrorBar,
 } from 'recharts';
 import type { RepoTimeStats } from '../utils/dataTransform';
 import { ChartCard } from './ChartCard';
@@ -32,6 +33,9 @@ function TimeToCommentTooltip({ active, payload }: { active?: boolean; payload?:
     <div className="bg-white border border-gray-200 rounded shadow p-2 text-sm">
       <p className="font-semibold">{d.repo}</p>
       <p>Avg time to first comment: {formatHours(d.avgTimeToComment)}</p>
+      {d.stdDevTimeToComment !== null && (
+        <p className="text-gray-500">Std dev: ± {formatHours(d.stdDevTimeToComment)}</p>
+      )}
     </div>
   );
 }
@@ -43,6 +47,9 @@ function TimeToCloseTooltip({ active, payload }: { active?: boolean; payload?: T
     <div className="bg-white border border-gray-200 rounded shadow p-2 text-sm">
       <p className="font-semibold">{d.repo}</p>
       <p>Avg time to close: {formatHours(d.avgTimeToClose)}</p>
+      {d.stdDevTimeToClose !== null && (
+        <p className="text-gray-500">Std dev: ± {formatHours(d.stdDevTimeToClose)}</p>
+      )}
     </div>
   );
 }
@@ -80,7 +87,9 @@ export function AvgTimeToComment({ data }: RepoTimeStatsProps) {
             tick={{ fontSize: 11 }}
           />
           <Tooltip content={<TimeToCommentTooltip />} />
-          <Bar dataKey="avgTimeToComment" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+          <Bar dataKey="avgTimeToComment" fill="#3b82f6" radius={[0, 4, 4, 0]}>
+            <ErrorBar dataKey="stdDevTimeToComment" direction="x" stroke="#1e40af" strokeWidth={1.5} />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>
@@ -120,7 +129,9 @@ export function AvgTimeToClose({ data }: RepoTimeStatsProps) {
             tick={{ fontSize: 11 }}
           />
           <Tooltip content={<TimeToCloseTooltip />} />
-          <Bar dataKey="avgTimeToClose" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+          <Bar dataKey="avgTimeToClose" fill="#3b82f6" radius={[0, 4, 4, 0]}>
+            <ErrorBar dataKey="stdDevTimeToClose" direction="x" stroke="#1e40af" strokeWidth={1.5} />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>

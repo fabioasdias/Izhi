@@ -6,6 +6,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ErrorBar,
 } from 'recharts';
 import type { PersonTotal } from '../types';
 import { ChartCard } from './ChartCard';
@@ -25,7 +26,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
     <div className="bg-white border border-gray-200 rounded shadow p-2 text-sm">
       <p className="font-semibold">{d.name}</p>
       <p>Total: {d.total} comments</p>
-      <p>Avg per PR: {d.avgPerPR}</p>
+      <p>Avg per PR: {d.avgPerPR} ± {d.stdDevPerPR}</p>
       <p className="text-gray-500">{d.prsCommented} PRs reviewed</p>
     </div>
   );
@@ -76,7 +77,9 @@ export function AvgCommentsPerPR({ data }: TotalCommentsByPersonProps) {
             tick={{ fontSize: 11 }}
           />
           <Tooltip content={<CustomTooltip />} />
-          <Bar dataKey="avgPerPR" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+          <Bar dataKey="avgPerPR" fill="#3b82f6" radius={[0, 4, 4, 0]}>
+            <ErrorBar dataKey="stdDevPerPR" direction="x" stroke="#1e40af" strokeWidth={1.5} />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>
