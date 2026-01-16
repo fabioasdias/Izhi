@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import type { CommentReport } from '../types';
-import { getPersonTotals, getAverageStats, getPRMergedByPerson, getPRCreatedByPerson, getPRsByRepo, getRepoTimeStats } from '../utils/dataTransform';
+import { getPersonTotals, getAverageStats, getPRMergedByPerson, getPRCreatedByPerson, getPRsByRepo, getRepoTimeStats, getActivityOverTime } from '../utils/dataTransform';
 import { TotalCommentsByPerson, AvgCommentsPerPR } from './TotalCommentsByPerson';
 import { PRMergedByPerson } from './PRClosedByPerson';
 import { PRCreatedByPerson } from './PRCreatedByPerson';
 import { PRsByRepo } from './PRsByRepo';
 import { AvgTimeToComment, AvgTimeToClose } from './RepoTimeStats';
+import { ActivityOverTime } from './ActivityOverTime';
 
 interface DashboardProps {
   data: CommentReport;
@@ -42,6 +43,11 @@ export function Dashboard({ data, excludeBots, selectedRepo }: DashboardProps) {
   const repoTimeStats = useMemo(
     () => getRepoTimeStats(data, selectedRepo),
     [data, selectedRepo]
+  );
+
+  const activityOverTime = useMemo(
+    () => getActivityOverTime(data, excludeBots, selectedRepo),
+    [data, excludeBots, selectedRepo]
   );
 
   const dateRangeText = useMemo(() => {
@@ -81,6 +87,8 @@ export function Dashboard({ data, excludeBots, selectedRepo }: DashboardProps) {
           <p className="text-2xl font-bold text-gray-900">{stats.avgCommentsPerPR}</p>
         </div>
       </div>
+
+      <ActivityOverTime data={activityOverTime} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TotalCommentsByPerson data={personTotals} />

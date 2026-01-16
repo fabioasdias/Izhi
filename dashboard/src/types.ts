@@ -46,3 +46,11 @@ export interface RepoPRCounts {
   merged: number;
   closed: number;
 }
+
+export interface ActivityByDate {
+  date: string;
+  created: number;
+  comment: number;
+  merged: number;
+  closed: number;
+}

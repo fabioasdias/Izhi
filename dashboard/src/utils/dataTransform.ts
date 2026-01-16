@@ -1,4 +1,4 @@
-import type { CommentReport, PersonTotal, PRMergedByPerson, RepoPRCounts } from '../types';
+import type { CommentReport, PersonTotal, PRMergedByPerson, RepoPRCounts, ActivityByDate } from '../types';
 
 export function isBot(name: string): boolean {
   return name.endsWith('[bot]') || name === 'Copilot';
@@ -213,4 +213,30 @@ export function getAverageStats(
     totalPRs > 0 ? Math.round((totalComments / totalPRs) * 10) / 10 : 0;
 
   return { totalComments, totalPeople, averagePerPerson, avgCommentsPerPR };
+}
+
+export function getActivityOverTime(
+  report: CommentReport,
+  excludeBots: boolean = true,
+  selectedRepo: string | null = null
+): ActivityByDate[] {
+  const activityByDate = new Map<string, { created: number; comment: number; merged: number; closed: number }>();
+
+  for (const [repo, prs] of Object.entries(report.repositories)) {
+    if (selectedRepo && repo !== selectedRepo) continue;
+    for (const pr of prs) {
+      for (const event of pr.events) {
+        if (excludeBots && isBot(event.person)) continue;
+
+        const date = event.date.split('T')[0];
+        const existing = activityByDate.get(date) ?? { created: 0, comment: 0, merged: 0, closed: 0 };
+        existing[event.type] += 1;
+        activityByDate.set(date, existing);
+      }
+    }
+  }
+
+  return Array.from(activityByDate.entries())
+    .map(([date, counts]) => ({ date, ...counts }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
