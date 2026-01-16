@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gh-pr-comments"
+version = "0.1.0"
+description = "Analyze PR comments across a GitHub organization"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PyGithub>=2.1.0",
+    "click>=8.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-mock>=3.10.0",
+]
+
+[project.scripts]
+gh-pr-comments = "gh_pr_comments.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
