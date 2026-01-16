@@ -155,12 +155,24 @@ def fetch_organization_data(
     client: Github,
     org_name: str,
     date_filter: DateFilter,
+    repo_filter: callable = None,
 ) -> Iterator[tuple[str, list[PRRecord]]]:
     """Fetch all PR data from all repos in an organization.
 
     Yields (repo_name, prs) tuples as each repository is processed.
+
+    Args:
+        client: GitHub API client
+        org_name: GitHub organization name
+        date_filter: Date range filter for PRs
+        repo_filter: Optional callable(repo_name) -> bool, returns True if repo should be processed
     """
     for repo in fetch_org_repos(client, org_name):
+        # Skip repos that don't pass the filter
+        if repo_filter and not repo_filter(repo.name):
+            logger.info(f"Skipping filtered repository: {repo.name}")
+            continue
+
         prs: list[PRRecord] = []
 
         try:

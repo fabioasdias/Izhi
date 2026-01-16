@@ -285,12 +285,23 @@ def fetch_pr_record_gh(
 def fetch_organization_data_gh(
     org_name: str,
     date_filter: DateFilter,
+    repo_filter: callable = None,
 ) -> Iterator[tuple[str, list[PRRecord]]]:
     """Fetch all PR data from all repos in an organization using gh CLI.
 
     Yields (repo_name, prs) tuples as each repository is processed.
+
+    Args:
+        org_name: GitHub organization name
+        date_filter: Date range filter for PRs
+        repo_filter: Optional callable(repo_name) -> bool, returns True if repo should be processed
     """
     for repo_name in fetch_org_repos_gh(org_name):
+        # Skip repos that don't pass the filter
+        if repo_filter and not repo_filter(repo_name):
+            logger.info(f"Skipping filtered repository: {repo_name}")
+            continue
+
         prs: list[PRRecord] = []
 
         try:

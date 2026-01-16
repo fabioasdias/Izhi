@@ -126,11 +126,11 @@ def main(
         """Check if a repository should be processed based on include/exclude patterns."""
         # If include patterns specified, repo must match at least one
         if include_patterns:
-            if not any(fnmatch.fnmatch(repo_name, pattern) for pattern in include_patterns):
+            if not any(fnmatch.fnmatch(repo_name, p) for p in include_patterns):
                 return False
         # If exclude patterns specified, repo must not match any
         if exclude_patterns:
-            if any(fnmatch.fnmatch(repo_name, pattern) for pattern in exclude_patterns):
+            if any(fnmatch.fnmatch(repo_name, p) for p in exclude_patterns):
                 return False
         return True
 
@@ -167,16 +167,13 @@ def main(
     logger.info(f"Fetching PR data for: {org}")
     try:
         if use_gh_cli:
-            data_iterator = fetch_organization_data_gh(org, date_filter)
+            data_iterator = fetch_organization_data_gh(org, date_filter, should_process_repo)
         else:
-            data_iterator = fetch_organization_data(client, org, date_filter)
+            data_iterator = fetch_organization_data(client, org, date_filter, should_process_repo)
 
         for repo_name, prs in data_iterator:
             if interrupted:
                 break
-            if not should_process_repo(repo_name):
-                logger.info(f"Skipping filtered repository: {repo_name}")
-                continue
             report["repositories"][repo_name] = prs
             report["generated_at"] = datetime.now(timezone.utc).isoformat()
             save_report()
