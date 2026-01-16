@@ -15,6 +15,7 @@ from .auth import (
     get_github_client_unauthenticated,
 )
 from .fetcher import FetchError, fetch_organization_data
+from .gh_cli_fetcher import GhCliError, fetch_organization_data_gh
 from .models import DateFilter
 
 load_dotenv()
@@ -42,6 +43,7 @@ def parse_date(ctx: click.Context, param: click.Parameter, value: str | None) ->
 @click.option("--since", callback=parse_date, help="Start date (YYYY-MM-DD)")
 @click.option("--until", callback=parse_date, help="End date (YYYY-MM-DD)")
 @click.option("--verbose", is_flag=True, help="Enable verbose logging")
+@click.option("--use-gh-cli", is_flag=True, default=False, help="Use gh CLI instead of PyGithub (useful for EMU orgs)")
 def main(
     org: str,
     output: str | None,
@@ -52,6 +54,7 @@ def main(
     since: date | None,
     until: date | None,
     verbose: bool,
+    use_gh_cli: bool,
 ) -> None:
     """Fetch PR events from a GitHub organization."""
     # Configure logging
@@ -73,27 +76,31 @@ def main(
     if output is None:
         output = f"{org}.json"
 
-    # Authentication
-    has_token = token is not None
-    has_app_auth = all([app_id, private_key, installation_id])
+    # Authentication (not needed for gh CLI mode)
+    client = None
+    if not use_gh_cli:
+        has_token = token is not None
+        has_app_auth = all([app_id, private_key, installation_id])
 
-    if any([app_id, private_key, installation_id]) and not has_app_auth:
-        click.echo("Error: GitHub App auth requires --app-id, --private-key, and --installation-id", err=True)
-        sys.exit(1)
+        if any([app_id, private_key, installation_id]) and not has_app_auth:
+            click.echo("Error: GitHub App auth requires --app-id, --private-key, and --installation-id", err=True)
+            sys.exit(1)
 
-    try:
-        if has_app_auth:
-            logger.info("Authenticating with GitHub App")
-            client = get_github_client_from_app(app_id, private_key, installation_id)
-        elif has_token:
-            logger.info("Authenticating with Personal Access Token")
-            client = get_github_client_from_token(token)
-        else:
-            logger.info("Using unauthenticated access (60 req/hr limit)")
-            client = get_github_client_unauthenticated()
-    except AuthenticationError as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
+        try:
+            if has_app_auth:
+                logger.info("Authenticating with GitHub App")
+                client = get_github_client_from_app(app_id, private_key, installation_id)
+            elif has_token:
+                logger.info("Authenticating with Personal Access Token")
+                client = get_github_client_from_token(token)
+            else:
+                logger.info("Using unauthenticated access (60 req/hr limit)")
+                client = get_github_client_unauthenticated()
+        except AuthenticationError as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+    else:
+        logger.info("Using gh CLI for data fetching")
 
     # Date filter
     date_filter = DateFilter(since=since, until=until)
@@ -119,12 +126,17 @@ def main(
     # Fetch data, saving after each repository
     logger.info(f"Fetching PR data for: {org}")
     try:
-        for repo_name, prs in fetch_organization_data(client, org, date_filter):
+        if use_gh_cli:
+            data_iterator = fetch_organization_data_gh(org, date_filter)
+        else:
+            data_iterator = fetch_organization_data(client, org, date_filter)
+
+        for repo_name, prs in data_iterator:
             report["repositories"][repo_name] = prs
             report["generated_at"] = datetime.now(timezone.utc).isoformat()
             save_report()
             logger.info(f"Saved progress: {len(report['repositories'])} repos")
-    except FetchError as e:
+    except (FetchError, GhCliError) as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
