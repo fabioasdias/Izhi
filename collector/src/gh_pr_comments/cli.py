@@ -3,6 +3,7 @@
 import fnmatch
 import json
 import logging
+import signal
 import sys
 from datetime import date, datetime, timezone
 
@@ -45,7 +46,8 @@ def parse_date(ctx: click.Context, param: click.Parameter, value: str | None) ->
 @click.option("--until", callback=parse_date, help="End date (YYYY-MM-DD)")
 @click.option("--verbose", is_flag=True, help="Enable verbose logging")
 @click.option("--use-gh-cli", is_flag=True, default=False, help="Use gh CLI instead of PyGithub (useful for EMU orgs)")
-@click.option("--ignore-repo", multiple=True, help="Repository pattern to ignore, supports wildcards like '*test*' (can be repeated)")
+@click.option("--include-repo", multiple=True, help="Only include repos matching pattern, supports wildcards like '*api*' (can be repeated)")
+@click.option("--ignore-repo", multiple=True, help="Exclude repos matching pattern, supports wildcards like '*test*' (can be repeated)")
 def main(
     org: str,
     output: str | None,
@@ -57,6 +59,7 @@ def main(
     until: date | None,
     verbose: bool,
     use_gh_cli: bool,
+    include_repo: tuple[str, ...],
     ignore_repo: tuple[str, ...],
 ) -> None:
     """Fetch PR events from a GitHub organization."""
@@ -110,14 +113,26 @@ def main(
     if since or until:
         logger.info(f"Date filter: {since or 'start'} to {until or 'now'}")
 
-    # Repository ignore patterns
-    ignore_patterns = list(ignore_repo)
-    if ignore_patterns:
-        logger.info(f"Ignoring repositories matching: {', '.join(ignore_patterns)}")
+    # Repository filter patterns
+    include_patterns = list(include_repo)
+    exclude_patterns = list(ignore_repo)
 
-    def should_ignore_repo(repo_name: str) -> bool:
-        """Check if a repository should be ignored based on patterns."""
-        return any(fnmatch.fnmatch(repo_name, pattern) for pattern in ignore_patterns)
+    if include_patterns:
+        logger.info(f"Including only repositories matching: {', '.join(include_patterns)}")
+    if exclude_patterns:
+        logger.info(f"Excluding repositories matching: {', '.join(exclude_patterns)}")
+
+    def should_process_repo(repo_name: str) -> bool:
+        """Check if a repository should be processed based on include/exclude patterns."""
+        # If include patterns specified, repo must match at least one
+        if include_patterns:
+            if not any(fnmatch.fnmatch(repo_name, pattern) for pattern in include_patterns):
+                return False
+        # If exclude patterns specified, repo must not match any
+        if exclude_patterns:
+            if any(fnmatch.fnmatch(repo_name, pattern) for pattern in exclude_patterns):
+                return False
+        return True
 
     # Build report structure
     report = {
@@ -135,6 +150,19 @@ def main(
         with open(output, "w") as f:
             json.dump(report, f, indent=2)
 
+    # Track if we were interrupted
+    interrupted = False
+
+    def handle_interrupt(signum: int, frame) -> None:
+        """Handle Ctrl+C by setting interrupted flag."""
+        nonlocal interrupted
+        interrupted = True
+        logger.info("Interrupt received, finishing current operation...")
+        click.echo("\nInterrupt received, saving progress...", err=True)
+
+    # Set up signal handler for graceful shutdown
+    original_handler = signal.signal(signal.SIGINT, handle_interrupt)
+
     # Fetch data, saving after each repository
     logger.info(f"Fetching PR data for: {org}")
     try:
@@ -144,8 +172,10 @@ def main(
             data_iterator = fetch_organization_data(client, org, date_filter)
 
         for repo_name, prs in data_iterator:
-            if should_ignore_repo(repo_name):
-                logger.info(f"Skipping ignored repository: {repo_name}")
+            if interrupted:
+                break
+            if not should_process_repo(repo_name):
+                logger.info(f"Skipping filtered repository: {repo_name}")
                 continue
             report["repositories"][repo_name] = prs
             report["generated_at"] = datetime.now(timezone.utc).isoformat()
@@ -153,9 +183,19 @@ def main(
             logger.info(f"Saved progress: {len(report['repositories'])} repos")
     except (FetchError, GhCliError) as e:
         click.echo(f"Error: {e}", err=True)
+        save_report()
+        logger.info(f"Partial report saved to: {output}")
         sys.exit(1)
+    finally:
+        # Restore original signal handler
+        signal.signal(signal.SIGINT, original_handler)
 
-    logger.info(f"Report written to: {output}")
+    if interrupted:
+        logger.info(f"Interrupted. Partial report saved to: {output}")
+        click.echo(f"Partial report saved to: {output}", err=True)
+        sys.exit(130)  # Standard exit code for SIGINT
+    else:
+        logger.info(f"Report written to: {output}")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ organizations where PyGithub may have authentication issues.
 import json
 import logging
 import subprocess
+import time
 from collections.abc import Iterator
 
 from .models import DateFilter, PREvent, PRRecord
@@ -19,31 +20,61 @@ class GhCliError(Exception):
     """Raised when a gh CLI command fails."""
 
 
-def _run_gh_command(args: list[str]) -> dict | list:
-    """Run a gh command and return parsed JSON output."""
+class RateLimitError(GhCliError):
+    """Raised when GitHub rate limit is hit."""
+
+
+def _is_rate_limit_error(error_msg: str) -> bool:
+    """Check if error message indicates a rate limit."""
+    rate_limit_indicators = [
+        "rate limit",
+        "API rate limit",
+        "secondary rate limit",
+        "abuse detection",
+        "403",
+        "retry-after",
+    ]
+    error_lower = error_msg.lower()
+    return any(indicator.lower() in error_lower for indicator in rate_limit_indicators)
+
+
+def _run_gh_command(args: list[str], max_retries: int = 3) -> dict | list:
+    """Run a gh command and return parsed JSON output with rate limit handling."""
     cmd = ["gh"] + args
     logger.debug(f"Running: {' '.join(cmd)}")
 
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except FileNotFoundError as e:
-        raise GhCliError("GitHub CLI (gh) not found. Install from https://cli.github.com/") from e
-    except subprocess.CalledProcessError as e:
-        error_msg = e.stderr.strip() if e.stderr else str(e)
-        raise GhCliError(f"gh command failed: {error_msg}") from e
+    for attempt in range(max_retries):
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
 
-    if not result.stdout.strip():
-        return []
+            if not result.stdout.strip():
+                return []
 
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError as e:
-        raise GhCliError(f"Failed to parse gh output: {e}") from e
+            return json.loads(result.stdout)
+
+        except FileNotFoundError as e:
+            raise GhCliError("GitHub CLI (gh) not found. Install from https://cli.github.com/") from e
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr.strip() if e.stderr else str(e)
+
+            if _is_rate_limit_error(error_msg):
+                if attempt < max_retries - 1:
+                    wait_seconds = min(60 * (2 ** attempt), 300)
+                    logger.warning(f"Rate limit hit. Waiting {wait_seconds}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_seconds)
+                    continue
+                raise RateLimitError(f"Rate limit exceeded after {max_retries} retries") from e
+
+            raise GhCliError(f"gh command failed: {error_msg}") from e
+        except json.JSONDecodeError as e:
+            raise GhCliError(f"Failed to parse gh output: {e}") from e
+
+    return []
 
 
 def fetch_org_repos_gh(org_name: str) -> Iterator[str]:
