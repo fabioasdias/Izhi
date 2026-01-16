@@ -5,9 +5,25 @@ from unittest.mock import MagicMock, patch
 
 from gh_pr_comments.auth import (
     AuthenticationError,
+    get_github_client_unauthenticated,
     get_github_client_from_token,
     get_github_client_from_app,
 )
+
+
+class TestGetGithubClientUnauthenticated:
+    """Tests for unauthenticated client."""
+
+    def test_returns_github_client(self):
+        """Should return an unauthenticated Github client."""
+        with patch("gh_pr_comments.auth.Github") as mock_github:
+            mock_client = MagicMock()
+            mock_github.return_value = mock_client
+
+            client = get_github_client_unauthenticated()
+
+            assert client == mock_client
+            mock_github.assert_called_once_with()
 
 
 class TestGetGithubClientFromToken:
@@ -110,3 +126,22 @@ class TestGetGithubClientFromApp:
                 )
 
             assert "Invalid app credentials" in str(exc_info.value)
+
+    def test_generic_exception_raises_auth_error(self, tmp_path):
+        """Generic exceptions should be wrapped in AuthenticationError."""
+        key_file = tmp_path / "private-key.pem"
+        key_file.write_text("-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----")
+
+        with patch("gh_pr_comments.auth.GithubIntegration") as mock_integration, \
+             patch("gh_pr_comments.auth.Auth"):
+
+            mock_integration.return_value.get_access_token.side_effect = ValueError("Something went wrong")
+
+            with pytest.raises(AuthenticationError) as exc_info:
+                get_github_client_from_app(
+                    app_id=12345,
+                    private_key_path=str(key_file),
+                    installation_id=67890,
+                )
+
+            assert "Something went wrong" in str(exc_info.value)
