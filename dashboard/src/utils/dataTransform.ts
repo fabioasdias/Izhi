@@ -7,11 +7,13 @@ export function isBot(name: string): boolean {
 export function getPersonTotals(
   report: CommentReport,
   excludeBots: boolean = true,
-  limit: number = 15
+  limit: number = 15,
+  selectedRepo: string | null = null
 ): PersonTotal[] {
   const personStats = new Map<string, { comments: number; prs: Set<string> }>();
 
   for (const [repo, prs] of Object.entries(report.repositories)) {
+    if (selectedRepo && repo !== selectedRepo) continue;
     for (const pr of prs) {
       for (const event of pr.events) {
         if (event.type !== 'comment') continue;
@@ -42,11 +44,13 @@ export function getPersonTotals(
 export function getPRMergedByPerson(
   report: CommentReport,
   excludeBots: boolean = true,
-  limit: number = 15
+  limit: number = 15,
+  selectedRepo: string | null = null
 ): PRMergedByPerson[] {
   const mergedCounts = new Map<string, number>();
 
-  for (const prs of Object.values(report.repositories)) {
+  for (const [repo, prs] of Object.entries(report.repositories)) {
+    if (selectedRepo && repo !== selectedRepo) continue;
     for (const pr of prs) {
       const mergedEvent = pr.events.find(e => e.type === 'merged');
       if (mergedEvent) {
@@ -72,11 +76,13 @@ export interface PRCreatedByPerson {
 export function getPRCreatedByPerson(
   report: CommentReport,
   excludeBots: boolean = true,
-  limit: number = 15
+  limit: number = 15,
+  selectedRepo: string | null = null
 ): PRCreatedByPerson[] {
   const createdCounts = new Map<string, number>();
 
-  for (const prs of Object.values(report.repositories)) {
+  for (const [repo, prs] of Object.entries(report.repositories)) {
+    if (selectedRepo && repo !== selectedRepo) continue;
     for (const pr of prs) {
       const createdEvent = pr.events.find(e => e.type === 'created');
       if (createdEvent) {
@@ -94,10 +100,14 @@ export function getPRCreatedByPerson(
   return entries;
 }
 
-export function getPRsByRepo(report: CommentReport): { repo: string; counts: RepoPRCounts }[] {
+export function getPRsByRepo(
+  report: CommentReport,
+  selectedRepo: string | null = null
+): { repo: string; counts: RepoPRCounts }[] {
   const repoCounts: { repo: string; counts: RepoPRCounts }[] = [];
 
   for (const [repo, prs] of Object.entries(report.repositories)) {
+    if (selectedRepo && repo !== selectedRepo) continue;
     let open = 0;
     let merged = 0;
     let closed = 0;
@@ -131,10 +141,14 @@ export interface RepoTimeStats {
   avgTimeToClose: number | null;    // hours
 }
 
-export function getRepoTimeStats(report: CommentReport): RepoTimeStats[] {
+export function getRepoTimeStats(
+  report: CommentReport,
+  selectedRepo: string | null = null
+): RepoTimeStats[] {
   const stats: RepoTimeStats[] = [];
 
   for (const [repo, prs] of Object.entries(report.repositories)) {
+    if (selectedRepo && repo !== selectedRepo) continue;
     const timeToComments: number[] = [];
     const timeToClose: number[] = [];
 
@@ -185,9 +199,10 @@ export interface AverageStats {
 
 export function getAverageStats(
   report: CommentReport,
-  excludeBots: boolean = true
+  excludeBots: boolean = true,
+  selectedRepo: string | null = null
 ): AverageStats {
-  const personTotals = getPersonTotals(report, excludeBots, 1000);
+  const personTotals = getPersonTotals(report, excludeBots, 1000, selectedRepo);
 
   const totalComments = personTotals.reduce((sum, p) => sum + p.total, 0);
   const totalPRs = personTotals.reduce((sum, p) => sum + p.prsCommented, 0);

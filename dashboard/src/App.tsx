@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { CommentReport } from './types';
 import { FileUpload } from './components/FileUpload';
 import { Dashboard } from './components/Dashboard';
@@ -6,6 +6,12 @@ import { Dashboard } from './components/Dashboard';
 function App() {
   const [data, setData] = useState<CommentReport | null>(null);
   const [excludeBots, setExcludeBots] = useState(true);
+  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+
+  const repoList = useMemo(() => {
+    if (!data) return [];
+    return Object.keys(data.repositories).sort();
+  }, [data]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -16,22 +22,36 @@ function App() {
           </h1>
           <div className="flex items-center gap-4">
             {data && (
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={excludeBots}
-                  onChange={(e) => setExcludeBots(e.target.checked)}
-                  className="rounded border-gray-300"
-                />
-                Exclude bots
-              </label>
+              <>
+                <select
+                  value={selectedRepo ?? ''}
+                  onChange={(e) => setSelectedRepo(e.target.value || null)}
+                  className="rounded border-gray-300 text-sm text-gray-700 px-3 py-1.5"
+                >
+                  <option value="">All repositories</option>
+                  {repoList.map((repo) => (
+                    <option key={repo} value={repo}>
+                      {repo}
+                    </option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={excludeBots}
+                    onChange={(e) => setExcludeBots(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  Exclude bots
+                </label>
+              </>
             )}
             <FileUpload onUpload={setData} />
           </div>
         </header>
 
         {data ? (
-          <Dashboard data={data} excludeBots={excludeBots} />
+          <Dashboard data={data} excludeBots={excludeBots} selectedRepo={selectedRepo} />
         ) : (
           <div className="flex flex-col items-center justify-center py-32 text-gray-500">
             <svg

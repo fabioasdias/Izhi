@@ -10,37 +10,38 @@ import { AvgTimeToComment, AvgTimeToClose } from './RepoTimeStats';
 interface DashboardProps {
   data: CommentReport;
   excludeBots: boolean;
+  selectedRepo: string | null;
 }
 
-export function Dashboard({ data, excludeBots }: DashboardProps) {
+export function Dashboard({ data, excludeBots, selectedRepo }: DashboardProps) {
   const personTotals = useMemo(
-    () => getPersonTotals(data, excludeBots),
-    [data, excludeBots]
+    () => getPersonTotals(data, excludeBots, 15, selectedRepo),
+    [data, excludeBots, selectedRepo]
   );
 
   const stats = useMemo(
-    () => getAverageStats(data, excludeBots),
-    [data, excludeBots]
+    () => getAverageStats(data, excludeBots, selectedRepo),
+    [data, excludeBots, selectedRepo]
   );
 
   const prMergedData = useMemo(
-    () => getPRMergedByPerson(data, excludeBots),
-    [data, excludeBots]
+    () => getPRMergedByPerson(data, excludeBots, 15, selectedRepo),
+    [data, excludeBots, selectedRepo]
   );
 
   const prCreatedData = useMemo(
-    () => getPRCreatedByPerson(data, excludeBots),
-    [data, excludeBots]
+    () => getPRCreatedByPerson(data, excludeBots, 15, selectedRepo),
+    [data, excludeBots, selectedRepo]
   );
 
   const prsByRepoData = useMemo(
-    () => getPRsByRepo(data),
-    [data]
+    () => getPRsByRepo(data, selectedRepo),
+    [data, selectedRepo]
   );
 
   const repoTimeStats = useMemo(
-    () => getRepoTimeStats(data),
-    [data]
+    () => getRepoTimeStats(data, selectedRepo),
+    [data, selectedRepo]
   );
 
   const dateRangeText = useMemo(() => {
