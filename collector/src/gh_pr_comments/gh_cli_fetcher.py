@@ -226,12 +226,31 @@ def fetch_pr_events_gh(
                     "person": user["login"],
                 })
 
-    # Events: review body comments
+    # Events: reviews (approvals, changes requested, and comments)
     for review in fetch_pr_reviews_gh(org_name, repo_name, pr_number):
         user = review.get("user", {})
         submitted_at = review.get("submitted_at", "")
+        state = review.get("state", "")
         body = review.get("body", "")
-        if user and user.get("login") and submitted_at and body:
+        if not user or not user.get("login") or not submitted_at:
+            continue
+
+        # Capture approval/changes_requested regardless of date filter
+        if state == "APPROVED":
+            events.append({
+                "type": "approved",
+                "date": submitted_at,
+                "person": user["login"],
+            })
+        elif state == "CHANGES_REQUESTED":
+            events.append({
+                "type": "changes_requested",
+                "date": submitted_at,
+                "person": user["login"],
+            })
+
+        # Capture review body as comment (date filtered)
+        if body:
             dt = datetime.fromisoformat(submitted_at.replace("Z", "+00:00"))
             if date_filter.contains(dt):
                 events.append({

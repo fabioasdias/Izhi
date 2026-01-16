@@ -198,6 +198,7 @@ class TestFetchPREventsGh:
                 {
                     "user": {"login": "reviewer1"},
                     "body": "LGTM!",
+                    "state": "COMMENTED",
                     "submitted_at": "2025-06-15T13:00:00Z",
                 }
             ],
@@ -217,6 +218,120 @@ class TestFetchPREventsGh:
         assert len(events) == 4  # created + 3 comments
         comment_events = [e for e in events if e["type"] == "comment"]
         assert len(comment_events) == 3
+
+    def test_fetches_approved_event(self, mocker):
+        """Should include approved event for approval reviews."""
+        mocker.patch(
+            "gh_pr_comments.gh_cli_fetcher.fetch_pr_comments_gh",
+            return_value=[],
+        )
+        mocker.patch(
+            "gh_pr_comments.gh_cli_fetcher.fetch_pr_issue_comments_gh",
+            return_value=[],
+        )
+        mocker.patch(
+            "gh_pr_comments.gh_cli_fetcher.fetch_pr_reviews_gh",
+            return_value=[
+                {
+                    "user": {"login": "reviewer"},
+                    "body": "LGTM!",
+                    "state": "APPROVED",
+                    "submitted_at": "2025-06-15T13:00:00Z",
+                }
+            ],
+        )
+
+        pr = {
+            "number": 1,
+            "title": "Test PR",
+            "createdAt": "2025-06-15T10:00:00Z",
+            "state": "OPEN",
+            "author": {"login": "author"},
+        }
+
+        date_filter = DateFilter()
+        events = fetch_pr_events_gh("test-org", "repo1", pr, date_filter)
+
+        approved_events = [e for e in events if e["type"] == "approved"]
+        assert len(approved_events) == 1
+        assert approved_events[0]["person"] == "reviewer"
+
+    def test_fetches_changes_requested_event(self, mocker):
+        """Should include changes_requested event for change request reviews."""
+        mocker.patch(
+            "gh_pr_comments.gh_cli_fetcher.fetch_pr_comments_gh",
+            return_value=[],
+        )
+        mocker.patch(
+            "gh_pr_comments.gh_cli_fetcher.fetch_pr_issue_comments_gh",
+            return_value=[],
+        )
+        mocker.patch(
+            "gh_pr_comments.gh_cli_fetcher.fetch_pr_reviews_gh",
+            return_value=[
+                {
+                    "user": {"login": "reviewer"},
+                    "body": "Please fix this",
+                    "state": "CHANGES_REQUESTED",
+                    "submitted_at": "2025-06-15T13:00:00Z",
+                }
+            ],
+        )
+
+        pr = {
+            "number": 1,
+            "title": "Test PR",
+            "createdAt": "2025-06-15T10:00:00Z",
+            "state": "OPEN",
+            "author": {"login": "author"},
+        }
+
+        date_filter = DateFilter()
+        events = fetch_pr_events_gh("test-org", "repo1", pr, date_filter)
+
+        cr_events = [e for e in events if e["type"] == "changes_requested"]
+        assert len(cr_events) == 1
+        assert cr_events[0]["person"] == "reviewer"
+
+    def test_approval_not_filtered_by_date(self, mocker):
+        """Approval events should be captured regardless of date filter."""
+        mocker.patch(
+            "gh_pr_comments.gh_cli_fetcher.fetch_pr_comments_gh",
+            return_value=[],
+        )
+        mocker.patch(
+            "gh_pr_comments.gh_cli_fetcher.fetch_pr_issue_comments_gh",
+            return_value=[],
+        )
+        mocker.patch(
+            "gh_pr_comments.gh_cli_fetcher.fetch_pr_reviews_gh",
+            return_value=[
+                {
+                    "user": {"login": "reviewer"},
+                    "body": "LGTM!",
+                    "state": "APPROVED",
+                    "submitted_at": "2025-01-01T13:00:00Z",  # Before date filter
+                }
+            ],
+        )
+
+        pr = {
+            "number": 1,
+            "title": "Test PR",
+            "createdAt": "2025-06-15T10:00:00Z",
+            "state": "OPEN",
+            "author": {"login": "author"},
+        }
+
+        date_filter = DateFilter(since=date(2025, 6, 1))
+        events = fetch_pr_events_gh("test-org", "repo1", pr, date_filter)
+
+        # Approval should be captured even though it's before date filter
+        approved_events = [e for e in events if e["type"] == "approved"]
+        assert len(approved_events) == 1
+        # But the comment from review body should NOT be captured (date filtered)
+        comment_events = [e for e in events if e["type"] == "comment"]
+        assert len(comment_events) == 0
 
     def test_fetches_merged_event(self, mocker):
         """Should include merged event for merged PRs."""
