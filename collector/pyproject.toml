@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gh-pr-comments"
-version = "0.2.0"
+name = "izhi"
+version = "0.3.0"
 description = "Analyze PR comments across a GitHub organization"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,7 +21,7 @@ dev = [
 ]
 
 [project.scripts]
-gh-pr-comments = "gh_pr_comments.cli:main"
+izhi = "gh_pr_comments.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
