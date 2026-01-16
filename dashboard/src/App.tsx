@@ -10,6 +10,8 @@ function App() {
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<FilterDateRange | null>(null);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [useMedian, setUseMedian] = useState(true);
+  const [excludeOwnPR, setExcludeOwnPR] = useState(false);
 
   const repoList = useMemo(() => {
     if (!data) return [];
@@ -72,6 +74,24 @@ function App() {
                   />
                   Exclude bots
                 </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={useMedian}
+                    onChange={(e) => setUseMedian(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  Use median
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={excludeOwnPR}
+                    onChange={(e) => setExcludeOwnPR(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  Exclude own PRs
+                </label>
               </>
             )}
             <FileUpload onUpload={handleDataUpload} />
@@ -85,6 +105,8 @@ function App() {
             selectedRepo={selectedRepo}
             dateRange={dateRange}
             selectedUser={selectedUser}
+            useMedian={useMedian}
+            excludeOwnPR={excludeOwnPR}
             onDateRangeChange={setDateRange}
           />
         ) : (

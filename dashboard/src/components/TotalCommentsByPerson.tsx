@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -15,6 +16,11 @@ interface TotalCommentsByPersonProps {
   data: PersonTotal[];
 }
 
+interface AvgCommentsPerPRProps {
+  data: PersonTotal[];
+  useMedian: boolean;
+}
+
 interface TooltipPayload {
   payload: PersonTotal;
 }
@@ -27,6 +33,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
       <p className="font-semibold">{d.name}</p>
       <p>Total: {d.total} comments</p>
       <p>Avg per PR: {d.avgPerPR} ± {d.stdDevPerPR}</p>
+      <p>Median per PR: {d.medianPerPR} [{d.minPerPR} - {d.maxPerPR}]</p>
       <p className="text-gray-500">{d.prsCommented} PRs reviewed</p>
     </div>
   );
@@ -57,11 +64,22 @@ export function TotalCommentsByPerson({ data }: TotalCommentsByPersonProps) {
   );
 }
 
-export function AvgCommentsPerPR({ data }: TotalCommentsByPersonProps) {
-  const sortedData = [...data].sort((a, b) => b.avgPerPR - a.avgPerPR);
+export function AvgCommentsPerPR({ data, useMedian }: AvgCommentsPerPRProps) {
+  const chartData = useMemo(() => {
+    return data.map(d => ({
+      ...d,
+      rangeError: [d.medianPerPR - d.minPerPR, d.maxPerPR - d.medianPerPR],
+    }));
+  }, [data]);
+
+  const dataKey = useMedian ? 'medianPerPR' : 'avgPerPR';
+  const sortedData = [...chartData].sort((a, b) =>
+    useMedian ? b.medianPerPR - a.medianPerPR : b.avgPerPR - a.avgPerPR
+  );
+  const title = useMedian ? 'Median Comments per PR' : 'Avg Comments per PR';
 
   return (
-    <ChartCard title="Avg Comments per PR">
+    <ChartCard title={title}>
       <ResponsiveContainer width="100%" height={400}>
         <BarChart
           data={sortedData}
@@ -77,8 +95,12 @@ export function AvgCommentsPerPR({ data }: TotalCommentsByPersonProps) {
             tick={{ fontSize: 11 }}
           />
           <Tooltip content={<CustomTooltip />} />
-          <Bar dataKey="avgPerPR" fill="#3b82f6" radius={[0, 4, 4, 0]}>
-            <ErrorBar dataKey="stdDevPerPR" direction="x" stroke="#1e40af" strokeWidth={1.5} />
+          <Bar dataKey={dataKey} fill="#3b82f6" radius={[0, 4, 4, 0]}>
+            {useMedian ? (
+              <ErrorBar dataKey="rangeError" direction="x" stroke="#1e40af" strokeWidth={1.5} />
+            ) : (
+              <ErrorBar dataKey="stdDevPerPR" direction="x" stroke="#1e40af" strokeWidth={1.5} />
+            )}
           </Bar>
         </BarChart>
       </ResponsiveContainer>

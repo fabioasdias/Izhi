@@ -1,4 +1,4 @@
-export type EventType = "created" | "comment" | "merged" | "closed";
+export type EventType = "created" | "comment" | "approved" | "changes_requested" | "merged" | "closed";
 
 export interface PREvent {
   type: EventType;
@@ -29,7 +29,10 @@ export interface PersonTotal {
   total: number;
   prsCommented: number;
   avgPerPR: number;
+  medianPerPR: number;
   stdDevPerPR: number;
+  minPerPR: number;
+  maxPerPR: number;
 }
 
 export interface PRMergedByPerson {
@@ -52,6 +55,8 @@ export interface ActivityByDate {
   date: string;
   created: number;
   comment: number;
+  approved: number;
+  changes_requested: number;
   merged: number;
   closed: number;
 }

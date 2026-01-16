@@ -27,12 +27,14 @@ interface TooltipPayload {
 function CustomTooltip({ active, payload }: { active?: boolean; payload?: TooltipPayload[] }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
-  const total = d.created + d.comment + d.merged + d.closed;
+  const total = d.created + d.comment + d.approved + d.changes_requested + d.merged + d.closed;
   return (
     <div className="bg-white border border-gray-200 rounded shadow p-2 text-sm">
       <p className="font-semibold">{d.date}</p>
       <p className="text-blue-600">PRs Created: {d.created}</p>
       <p className="text-purple-600">Comments: {d.comment}</p>
+      <p className="text-green-600">Approved: {d.approved}</p>
+      <p className="text-orange-600">Changes Requested: {d.changes_requested}</p>
       <p className="text-emerald-600">Merged: {d.merged}</p>
       <p className="text-rose-600">Closed: {d.closed}</p>
       <p className="text-gray-500">Total: {total}</p>
@@ -141,6 +143,22 @@ export function ActivityOverTime({ data, dateRange, onDateRangeChange }: Activit
             stroke="#8b5cf6"
             fill="#8b5cf6"
             name="Comments"
+          />
+          <Area
+            type="monotone"
+            dataKey="approved"
+            stackId="1"
+            stroke="#22c55e"
+            fill="#22c55e"
+            name="Approved"
+          />
+          <Area
+            type="monotone"
+            dataKey="changes_requested"
+            stackId="1"
+            stroke="#f97316"
+            fill="#f97316"
+            name="Changes Requested"
           />
           <Area
             type="monotone"

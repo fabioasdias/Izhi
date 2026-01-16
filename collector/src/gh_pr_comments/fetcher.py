@@ -104,16 +104,31 @@ def fetch_pr_events(pr: PullRequest, date_filter: DateFilter) -> list[PREvent]:
         except RateLimitExceededException:
             _handle_rate_limit(attempt, max_retries)
 
-    # Events: review body comments
+    # Events: reviews (approvals, changes requested, and comments)
     for attempt in range(max_retries):
         try:
             for review in pr.get_reviews():
-                if review.user and review.body and date_filter.contains(review.submitted_at):
-                    events.append({
-                        "type": "comment",
-                        "date": review.submitted_at.isoformat(),
-                        "person": review.user.login,
-                    })
+                if review.user and date_filter.contains(review.submitted_at):
+                    # Capture approval/changes_requested as separate event types
+                    if review.state == "APPROVED":
+                        events.append({
+                            "type": "approved",
+                            "date": review.submitted_at.isoformat(),
+                            "person": review.user.login,
+                        })
+                    elif review.state == "CHANGES_REQUESTED":
+                        events.append({
+                            "type": "changes_requested",
+                            "date": review.submitted_at.isoformat(),
+                            "person": review.user.login,
+                        })
+                    # Also capture review body as comment if present
+                    if review.body:
+                        events.append({
+                            "type": "comment",
+                            "date": review.submitted_at.isoformat(),
+                            "person": review.user.login,
+                        })
             break
         except RateLimitExceededException:
             _handle_rate_limit(attempt, max_retries)

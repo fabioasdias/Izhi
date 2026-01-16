@@ -15,7 +15,7 @@ class DateRange(TypedDict, total=False):
 class PREvent(TypedDict):
     """A single event on a PR."""
 
-    type: Literal["created", "comment", "merged", "closed"]
+    type: Literal["created", "comment", "approved", "changes_requested", "merged", "closed"]
     date: str
     person: str
 

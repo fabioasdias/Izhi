@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 import type { CommentReport, FilterDateRange } from '../types';
-import { getPersonTotals, getAverageStats, getPRMergedByPerson, getPRCreatedByPerson, getPRsByRepo, getRepoTimeStats, getActivityOverTime } from '../utils/dataTransform';
+import { getPersonTotals, getAverageStats, getPRMergedByPerson, getPRCreatedByPerson, getPRsByRepo, getRepoTimeStats, getActivityOverTime, getReviewStatsByPerson } from '../utils/dataTransform';
 import { TotalCommentsByPerson, AvgCommentsPerPR } from './TotalCommentsByPerson';
 import { PRMergedByPerson } from './PRClosedByPerson';
 import { PRCreatedByPerson } from './PRCreatedByPerson';
 import { PRsByRepo } from './PRsByRepo';
 import { AvgTimeToComment, AvgTimeToClose } from './RepoTimeStats';
 import { ActivityOverTime } from './ActivityOverTime';
+import { ReviewsByPerson } from './ReviewStatsByPerson';
 
 interface DashboardProps {
   data: CommentReport;
@@ -14,18 +15,20 @@ interface DashboardProps {
   selectedRepo: string | null;
   dateRange: FilterDateRange | null;
   selectedUser: string | null;
+  useMedian: boolean;
+  excludeOwnPR: boolean;
   onDateRangeChange: (range: FilterDateRange | null) => void;
 }
 
-export function Dashboard({ data, excludeBots, selectedRepo, dateRange, selectedUser, onDateRangeChange }: DashboardProps) {
+export function Dashboard({ data, excludeBots, selectedRepo, dateRange, selectedUser, useMedian, excludeOwnPR, onDateRangeChange }: DashboardProps) {
   const personTotals = useMemo(
-    () => getPersonTotals(data, excludeBots, 15, selectedRepo, dateRange, selectedUser),
-    [data, excludeBots, selectedRepo, dateRange, selectedUser]
+    () => getPersonTotals(data, excludeBots, 15, selectedRepo, dateRange, selectedUser, excludeOwnPR),
+    [data, excludeBots, selectedRepo, dateRange, selectedUser, excludeOwnPR]
   );
 
   const stats = useMemo(
-    () => getAverageStats(data, excludeBots, selectedRepo, dateRange, selectedUser),
-    [data, excludeBots, selectedRepo, dateRange, selectedUser]
+    () => getAverageStats(data, excludeBots, selectedRepo, dateRange, selectedUser, excludeOwnPR),
+    [data, excludeBots, selectedRepo, dateRange, selectedUser, excludeOwnPR]
   );
 
   const prMergedData = useMemo(
@@ -51,8 +54,13 @@ export function Dashboard({ data, excludeBots, selectedRepo, dateRange, selected
   // Activity over time is NOT filtered by date range (it's the source of that filter)
   // but IS filtered by user
   const activityOverTime = useMemo(
-    () => getActivityOverTime(data, excludeBots, selectedRepo, selectedUser),
-    [data, excludeBots, selectedRepo, selectedUser]
+    () => getActivityOverTime(data, excludeBots, selectedRepo, selectedUser, excludeOwnPR),
+    [data, excludeBots, selectedRepo, selectedUser, excludeOwnPR]
+  );
+
+  const reviewStats = useMemo(
+    () => getReviewStatsByPerson(data, excludeBots, 15, selectedRepo, dateRange, selectedUser, excludeOwnPR),
+    [data, excludeBots, selectedRepo, dateRange, selectedUser, excludeOwnPR]
   );
 
   const dateRangeText = useMemo(() => {
@@ -119,7 +127,7 @@ export function Dashboard({ data, excludeBots, selectedRepo, dateRange, selected
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TotalCommentsByPerson data={personTotals} />
-        <AvgCommentsPerPR data={personTotals} />
+        <AvgCommentsPerPR data={personTotals} useMedian={useMedian} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -129,11 +137,12 @@ export function Dashboard({ data, excludeBots, selectedRepo, dateRange, selected
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <PRsByRepo data={prsByRepoData} />
-        <AvgTimeToComment data={repoTimeStats} />
+        <AvgTimeToComment data={repoTimeStats} useMedian={useMedian} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <AvgTimeToClose data={repoTimeStats} />
+        <AvgTimeToClose data={repoTimeStats} useMedian={useMedian} />
+        <ReviewsByPerson data={reviewStats} />
       </div>
     </div>
   );

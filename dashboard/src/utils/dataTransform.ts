@@ -1,7 +1,12 @@
-import type { CommentReport, PersonTotal, PRMergedByPerson, RepoPRCounts, ActivityByDate, FilterDateRange } from '../types';
+import type { CommentReport, PersonTotal, PRMergedByPerson, RepoPRCounts, ActivityByDate, FilterDateRange, PRRecord } from '../types';
 
 export function isBot(name: string): boolean {
   return name.endsWith('[bot]') || name === 'Copilot';
+}
+
+function getPRAuthor(pr: PRRecord): string | null {
+  const createdEvent = pr.events.find(e => e.type === 'created');
+  return createdEvent?.person ?? null;
 }
 
 function isInDateRange(eventDate: string, dateRange: FilterDateRange | null): boolean {
@@ -22,6 +27,16 @@ function calculateStdDev(values: number[], mean: number): number {
   const squaredDiffs = values.map(v => Math.pow(v - mean, 2));
   const variance = squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
   return Math.round(Math.sqrt(variance) * 10) / 10;
+}
+
+function calculateMedian(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2;
+  return Math.round(median * 10) / 10;
 }
 
 export function getUniqueUsers(
@@ -48,18 +63,21 @@ export function getPersonTotals(
   limit: number = 15,
   selectedRepo: string | null = null,
   dateRange: FilterDateRange | null = null,
-  selectedUser: string | null = null
+  selectedUser: string | null = null,
+  excludeOwnPR: boolean = false
 ): PersonTotal[] {
   const personStats = new Map<string, { comments: number; commentsPerPR: Map<string, number> }>();
 
   for (const [repo, prs] of Object.entries(report.repositories)) {
     if (selectedRepo && repo !== selectedRepo) continue;
     for (const pr of prs) {
+      const prAuthor = getPRAuthor(pr);
       for (const event of pr.events) {
         if (event.type !== 'comment') continue;
         if (excludeBots && isBot(event.person)) continue;
         if (!isInDateRange(event.date, dateRange)) continue;
         if (!matchesUser(event.person, selectedUser)) continue;
+        if (excludeOwnPR && event.person === prAuthor) continue;
 
         const prKey = `${repo}#${pr.number}`;
         const stats = personStats.get(event.person) ?? { comments: 0, commentsPerPR: new Map() };
@@ -75,13 +93,19 @@ export function getPersonTotals(
       const prsCommented = stats.commentsPerPR.size;
       const avgPerPR = prsCommented > 0 ? Math.round((stats.comments / prsCommented) * 10) / 10 : 0;
       const commentsPerPRValues = Array.from(stats.commentsPerPR.values());
+      const medianPerPR = calculateMedian(commentsPerPRValues);
       const stdDevPerPR = calculateStdDev(commentsPerPRValues, avgPerPR);
+      const minPerPR = commentsPerPRValues.length > 0 ? Math.min(...commentsPerPRValues) : 0;
+      const maxPerPR = commentsPerPRValues.length > 0 ? Math.max(...commentsPerPRValues) : 0;
       return {
         name,
         total: stats.comments,
         prsCommented,
         avgPerPR,
+        medianPerPR,
         stdDevPerPR,
+        minPerPR,
+        maxPerPR,
       };
     })
     .sort((a, b) => b.total - a.total)
@@ -208,9 +232,15 @@ export function getPRsByRepo(
 export interface RepoTimeStats {
   repo: string;
   avgTimeToComment: number | null;  // hours
+  medianTimeToComment: number | null;
   stdDevTimeToComment: number | null;
+  minTimeToComment: number | null;
+  maxTimeToComment: number | null;
   avgTimeToClose: number | null;    // hours
+  medianTimeToClose: number | null;
   stdDevTimeToClose: number | null;
+  minTimeToClose: number | null;
+  maxTimeToClose: number | null;
 }
 
 export function getRepoTimeStats(
@@ -256,20 +286,32 @@ export function getRepoTimeStats(
     const avgComment = timeToComments.length > 0
       ? Math.round((timeToComments.reduce((a, b) => a + b, 0) / timeToComments.length) * 10) / 10
       : null;
+    const medianComment = timeToComments.length > 0 ? calculateMedian(timeToComments) : null;
     const stdDevComment = avgComment !== null ? calculateStdDev(timeToComments, avgComment) : null;
+    const minComment = timeToComments.length > 0 ? Math.round(Math.min(...timeToComments) * 10) / 10 : null;
+    const maxComment = timeToComments.length > 0 ? Math.round(Math.max(...timeToComments) * 10) / 10 : null;
 
     const avgClose = timeToClose.length > 0
       ? Math.round((timeToClose.reduce((a, b) => a + b, 0) / timeToClose.length) * 10) / 10
       : null;
+    const medianClose = timeToClose.length > 0 ? calculateMedian(timeToClose) : null;
     const stdDevClose = avgClose !== null ? calculateStdDev(timeToClose, avgClose) : null;
+    const minClose = timeToClose.length > 0 ? Math.round(Math.min(...timeToClose) * 10) / 10 : null;
+    const maxClose = timeToClose.length > 0 ? Math.round(Math.max(...timeToClose) * 10) / 10 : null;
 
     if (avgComment !== null || avgClose !== null) {
       stats.push({
         repo,
         avgTimeToComment: avgComment,
+        medianTimeToComment: medianComment,
         stdDevTimeToComment: stdDevComment,
+        minTimeToComment: minComment,
+        maxTimeToComment: maxComment,
         avgTimeToClose: avgClose,
+        medianTimeToClose: medianClose,
         stdDevTimeToClose: stdDevClose,
+        minTimeToClose: minClose,
+        maxTimeToClose: maxClose,
       });
     }
   }
@@ -289,9 +331,10 @@ export function getAverageStats(
   excludeBots: boolean = true,
   selectedRepo: string | null = null,
   dateRange: FilterDateRange | null = null,
-  selectedUser: string | null = null
+  selectedUser: string | null = null,
+  excludeOwnPR: boolean = false
 ): AverageStats {
-  const personTotals = getPersonTotals(report, excludeBots, 1000, selectedRepo, dateRange, selectedUser);
+  const personTotals = getPersonTotals(report, excludeBots, 1000, selectedRepo, dateRange, selectedUser, excludeOwnPR);
 
   const totalComments = personTotals.reduce((sum, p) => sum + p.total, 0);
   const totalPRs = personTotals.reduce((sum, p) => sum + p.prsCommented, 0);
@@ -308,19 +351,23 @@ export function getActivityOverTime(
   report: CommentReport,
   excludeBots: boolean = true,
   selectedRepo: string | null = null,
-  selectedUser: string | null = null
+  selectedUser: string | null = null,
+  excludeOwnPR: boolean = false
 ): ActivityByDate[] {
-  const activityByDate = new Map<string, { created: number; comment: number; merged: number; closed: number }>();
+  const activityByDate = new Map<string, { created: number; comment: number; approved: number; changes_requested: number; merged: number; closed: number }>();
 
   for (const [repo, prs] of Object.entries(report.repositories)) {
     if (selectedRepo && repo !== selectedRepo) continue;
     for (const pr of prs) {
+      const prAuthor = getPRAuthor(pr);
       for (const event of pr.events) {
         if (excludeBots && isBot(event.person)) continue;
         if (!matchesUser(event.person, selectedUser)) continue;
+        // For excludeOwnPR, only filter comment/approved/changes_requested (not created/merged/closed)
+        if (excludeOwnPR && event.person === prAuthor && ['comment', 'approved', 'changes_requested'].includes(event.type)) continue;
 
         const date = event.date.split('T')[0];
-        const existing = activityByDate.get(date) ?? { created: 0, comment: 0, merged: 0, closed: 0 };
+        const existing = activityByDate.get(date) ?? { created: 0, comment: 0, approved: 0, changes_requested: 0, merged: 0, closed: 0 };
         existing[event.type] += 1;
         activityByDate.set(date, existing);
       }
@@ -330,4 +377,59 @@ export function getActivityOverTime(
   return Array.from(activityByDate.entries())
     .map(([date, counts]) => ({ date, ...counts }))
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export interface ReviewStatsByPerson {
+  name: string;
+  approved: number;
+  changesRequested: number;
+  total: number;
+}
+
+export function getReviewStatsByPerson(
+  report: CommentReport,
+  excludeBots: boolean = true,
+  limit: number = 15,
+  selectedRepo: string | null = null,
+  dateRange: FilterDateRange | null = null,
+  selectedUser: string | null = null,
+  excludeOwnPR: boolean = false
+): ReviewStatsByPerson[] {
+  // Track unique reviews per person per PR (person -> { approved PRs, changes_requested PRs })
+  const reviewStats = new Map<string, { approvedPRs: Set<string>; changesRequestedPRs: Set<string> }>();
+
+  for (const [repo, prs] of Object.entries(report.repositories)) {
+    if (selectedRepo && repo !== selectedRepo) continue;
+    for (const pr of prs) {
+      const prKey = `${repo}#${pr.number}`;
+      const prAuthor = getPRAuthor(pr);
+      for (const event of pr.events) {
+        if (event.type !== 'approved' && event.type !== 'changes_requested') continue;
+        if (excludeBots && isBot(event.person)) continue;
+        if (!isInDateRange(event.date, dateRange)) continue;
+        if (!matchesUser(event.person, selectedUser)) continue;
+        if (excludeOwnPR && event.person === prAuthor) continue;
+
+        const stats = reviewStats.get(event.person) ?? { approvedPRs: new Set(), changesRequestedPRs: new Set() };
+        if (event.type === 'approved') {
+          stats.approvedPRs.add(prKey);
+        } else {
+          stats.changesRequestedPRs.add(prKey);
+        }
+        reviewStats.set(event.person, stats);
+      }
+    }
+  }
+
+  const entries = Array.from(reviewStats.entries())
+    .map(([name, stats]) => ({
+      name,
+      approved: stats.approvedPRs.size,
+      changesRequested: stats.changesRequestedPRs.size,
+      total: stats.approvedPRs.size + stats.changesRequestedPRs.size,
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit);
+
+  return entries;
 }
