@@ -1,14 +1,47 @@
-import type { CommentReport, PersonTotal, PRMergedByPerson, RepoPRCounts, ActivityByDate } from '../types';
+import type { CommentReport, PersonTotal, PRMergedByPerson, RepoPRCounts, ActivityByDate, FilterDateRange } from '../types';
 
 export function isBot(name: string): boolean {
   return name.endsWith('[bot]') || name === 'Copilot';
+}
+
+function isInDateRange(eventDate: string, dateRange: FilterDateRange | null): boolean {
+  if (!dateRange || (!dateRange.start && !dateRange.end)) return true;
+  const date = eventDate.split('T')[0];
+  if (dateRange.start && date < dateRange.start) return false;
+  if (dateRange.end && date > dateRange.end) return false;
+  return true;
+}
+
+function matchesUser(person: string, selectedUser: string | null): boolean {
+  if (!selectedUser) return true;
+  return person === selectedUser;
+}
+
+export function getUniqueUsers(
+  report: CommentReport,
+  excludeBots: boolean = true
+): string[] {
+  const users = new Set<string>();
+
+  for (const prs of Object.values(report.repositories)) {
+    for (const pr of prs) {
+      for (const event of pr.events) {
+        if (excludeBots && isBot(event.person)) continue;
+        users.add(event.person);
+      }
+    }
+  }
+
+  return Array.from(users).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 }
 
 export function getPersonTotals(
   report: CommentReport,
   excludeBots: boolean = true,
   limit: number = 15,
-  selectedRepo: string | null = null
+  selectedRepo: string | null = null,
+  dateRange: FilterDateRange | null = null,
+  selectedUser: string | null = null
 ): PersonTotal[] {
   const personStats = new Map<string, { comments: number; prs: Set<string> }>();
 
@@ -18,6 +51,8 @@ export function getPersonTotals(
       for (const event of pr.events) {
         if (event.type !== 'comment') continue;
         if (excludeBots && isBot(event.person)) continue;
+        if (!isInDateRange(event.date, dateRange)) continue;
+        if (!matchesUser(event.person, selectedUser)) continue;
 
         const prKey = `${repo}#${pr.number}`;
         const stats = personStats.get(event.person) ?? { comments: 0, prs: new Set() };
@@ -45,7 +80,9 @@ export function getPRMergedByPerson(
   report: CommentReport,
   excludeBots: boolean = true,
   limit: number = 15,
-  selectedRepo: string | null = null
+  selectedRepo: string | null = null,
+  dateRange: FilterDateRange | null = null,
+  selectedUser: string | null = null
 ): PRMergedByPerson[] {
   const mergedCounts = new Map<string, number>();
 
@@ -55,6 +92,8 @@ export function getPRMergedByPerson(
       const mergedEvent = pr.events.find(e => e.type === 'merged');
       if (mergedEvent) {
         if (excludeBots && isBot(mergedEvent.person)) continue;
+        if (!isInDateRange(mergedEvent.date, dateRange)) continue;
+        if (!matchesUser(mergedEvent.person, selectedUser)) continue;
         mergedCounts.set(mergedEvent.person, (mergedCounts.get(mergedEvent.person) ?? 0) + 1);
       }
     }
@@ -77,7 +116,9 @@ export function getPRCreatedByPerson(
   report: CommentReport,
   excludeBots: boolean = true,
   limit: number = 15,
-  selectedRepo: string | null = null
+  selectedRepo: string | null = null,
+  dateRange: FilterDateRange | null = null,
+  selectedUser: string | null = null
 ): PRCreatedByPerson[] {
   const createdCounts = new Map<string, number>();
 
@@ -87,6 +128,8 @@ export function getPRCreatedByPerson(
       const createdEvent = pr.events.find(e => e.type === 'created');
       if (createdEvent) {
         if (excludeBots && isBot(createdEvent.person)) continue;
+        if (!isInDateRange(createdEvent.date, dateRange)) continue;
+        if (!matchesUser(createdEvent.person, selectedUser)) continue;
         createdCounts.set(createdEvent.person, (createdCounts.get(createdEvent.person) ?? 0) + 1);
       }
     }
@@ -102,7 +145,9 @@ export function getPRCreatedByPerson(
 
 export function getPRsByRepo(
   report: CommentReport,
-  selectedRepo: string | null = null
+  selectedRepo: string | null = null,
+  dateRange: FilterDateRange | null = null,
+  selectedUser: string | null = null
 ): { repo: string; counts: RepoPRCounts }[] {
   const repoCounts: { repo: string; counts: RepoPRCounts }[] = [];
 
@@ -113,6 +158,15 @@ export function getPRsByRepo(
     let closed = 0;
 
     for (const pr of prs) {
+      // Check if PR has any activity in date range by selected user
+      const relevantEvents = pr.events.filter(e => {
+        if (!isInDateRange(e.date, dateRange)) return false;
+        if (!matchesUser(e.person, selectedUser)) return false;
+        return true;
+      });
+
+      if (relevantEvents.length === 0) continue;
+
       const hasMerged = pr.events.some(e => e.type === 'merged');
       const hasClosed = pr.events.some(e => e.type === 'closed');
 
@@ -125,7 +179,9 @@ export function getPRsByRepo(
       }
     }
 
-    repoCounts.push({ repo, counts: { open, merged, closed } });
+    if (open + merged + closed > 0) {
+      repoCounts.push({ repo, counts: { open, merged, closed } });
+    }
   }
 
   return repoCounts.sort((a, b) => {
@@ -143,7 +199,9 @@ export interface RepoTimeStats {
 
 export function getRepoTimeStats(
   report: CommentReport,
-  selectedRepo: string | null = null
+  selectedRepo: string | null = null,
+  dateRange: FilterDateRange | null = null,
+  selectedUser: string | null = null
 ): RepoTimeStats[] {
   const stats: RepoTimeStats[] = [];
 
@@ -155,6 +213,8 @@ export function getRepoTimeStats(
     for (const pr of prs) {
       const createdEvent = pr.events.find(e => e.type === 'created');
       if (!createdEvent) continue;
+      if (!isInDateRange(createdEvent.date, dateRange)) continue;
+      if (selectedUser && !pr.events.some(e => matchesUser(e.person, selectedUser))) continue;
 
       const createdDate = new Date(createdEvent.date).getTime();
 
@@ -184,7 +244,9 @@ export function getRepoTimeStats(
       ? Math.round((timeToClose.reduce((a, b) => a + b, 0) / timeToClose.length) * 10) / 10
       : null;
 
-    stats.push({ repo, avgTimeToComment: avgComment, avgTimeToClose: avgClose });
+    if (avgComment !== null || avgClose !== null) {
+      stats.push({ repo, avgTimeToComment: avgComment, avgTimeToClose: avgClose });
+    }
   }
 
   return stats.sort((a, b) => (b.avgTimeToClose ?? 0) - (a.avgTimeToClose ?? 0));
@@ -200,9 +262,11 @@ export interface AverageStats {
 export function getAverageStats(
   report: CommentReport,
   excludeBots: boolean = true,
-  selectedRepo: string | null = null
+  selectedRepo: string | null = null,
+  dateRange: FilterDateRange | null = null,
+  selectedUser: string | null = null
 ): AverageStats {
-  const personTotals = getPersonTotals(report, excludeBots, 1000, selectedRepo);
+  const personTotals = getPersonTotals(report, excludeBots, 1000, selectedRepo, dateRange, selectedUser);
 
   const totalComments = personTotals.reduce((sum, p) => sum + p.total, 0);
   const totalPRs = personTotals.reduce((sum, p) => sum + p.prsCommented, 0);
@@ -218,7 +282,8 @@ export function getAverageStats(
 export function getActivityOverTime(
   report: CommentReport,
   excludeBots: boolean = true,
-  selectedRepo: string | null = null
+  selectedRepo: string | null = null,
+  selectedUser: string | null = null
 ): ActivityByDate[] {
   const activityByDate = new Map<string, { created: number; comment: number; merged: number; closed: number }>();
 
@@ -227,6 +292,7 @@ export function getActivityOverTime(
     for (const pr of prs) {
       for (const event of pr.events) {
         if (excludeBots && isBot(event.person)) continue;
+        if (!matchesUser(event.person, selectedUser)) continue;
 
         const date = event.date.split('T')[0];
         const existing = activityByDate.get(date) ?? { created: 0, comment: 0, merged: 0, closed: 0 };

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import type { CommentReport } from './types';
+import type { CommentReport, FilterDateRange } from './types';
+import { getUniqueUsers } from './utils/dataTransform';
 import { FileUpload } from './components/FileUpload';
 import { Dashboard } from './components/Dashboard';
 
@@ -7,11 +8,26 @@ function App() {
   const [data, setData] = useState<CommentReport | null>(null);
   const [excludeBots, setExcludeBots] = useState(true);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<FilterDateRange | null>(null);
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
 
   const repoList = useMemo(() => {
     if (!data) return [];
     return Object.keys(data.repositories).sort();
   }, [data]);
+
+  const userList = useMemo(() => {
+    if (!data) return [];
+    return getUniqueUsers(data, excludeBots);
+  }, [data, excludeBots]);
+
+  const handleDataUpload = (newData: CommentReport) => {
+    setData(newData);
+    // Reset filters when new data is loaded
+    setSelectedRepo(null);
+    setDateRange(null);
+    setSelectedUser(null);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -35,6 +51,18 @@ function App() {
                     </option>
                   ))}
                 </select>
+                <select
+                  value={selectedUser ?? ''}
+                  onChange={(e) => setSelectedUser(e.target.value || null)}
+                  className="rounded border-gray-300 text-sm text-gray-700 px-3 py-1.5"
+                >
+                  <option value="">All users</option>
+                  {userList.map((user) => (
+                    <option key={user} value={user}>
+                      {user}
+                    </option>
+                  ))}
+                </select>
                 <label className="flex items-center gap-2 text-sm text-gray-700">
                   <input
                     type="checkbox"
@@ -46,12 +74,19 @@ function App() {
                 </label>
               </>
             )}
-            <FileUpload onUpload={setData} />
+            <FileUpload onUpload={handleDataUpload} />
           </div>
         </header>
 
         {data ? (
-          <Dashboard data={data} excludeBots={excludeBots} selectedRepo={selectedRepo} />
+          <Dashboard
+            data={data}
+            excludeBots={excludeBots}
+            selectedRepo={selectedRepo}
+            dateRange={dateRange}
+            selectedUser={selectedUser}
+            onDateRangeChange={setDateRange}
+          />
         ) : (
           <div className="flex flex-col items-center justify-center py-32 text-gray-500">
             <svg
@@ -69,7 +104,7 @@ function App() {
             </svg>
             <p className="text-lg">Upload a JSON report to get started</p>
             <p className="text-sm mt-1">
-              Generate one using: <code className="bg-gray-200 px-2 py-0.5 rounded">gh-pr-comments --org your-org</code>
+              Generate one using: <code className="bg-gray-200 px-2 py-0.5 rounded">izhi --org your-org</code>
             </p>
           </div>
         )}

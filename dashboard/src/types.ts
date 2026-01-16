@@ -54,3 +54,8 @@ export interface ActivityByDate {
   merged: number;
   closed: number;
 }
+
+export interface FilterDateRange {
+  start: string | null;
+  end: string | null;
+}

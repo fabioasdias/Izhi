@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { CommentReport } from '../types';
+import type { CommentReport, FilterDateRange } from '../types';
 import { getPersonTotals, getAverageStats, getPRMergedByPerson, getPRCreatedByPerson, getPRsByRepo, getRepoTimeStats, getActivityOverTime } from '../utils/dataTransform';
 import { TotalCommentsByPerson, AvgCommentsPerPR } from './TotalCommentsByPerson';
 import { PRMergedByPerson } from './PRClosedByPerson';
@@ -12,42 +12,47 @@ interface DashboardProps {
   data: CommentReport;
   excludeBots: boolean;
   selectedRepo: string | null;
+  dateRange: FilterDateRange | null;
+  selectedUser: string | null;
+  onDateRangeChange: (range: FilterDateRange | null) => void;
 }
 
-export function Dashboard({ data, excludeBots, selectedRepo }: DashboardProps) {
+export function Dashboard({ data, excludeBots, selectedRepo, dateRange, selectedUser, onDateRangeChange }: DashboardProps) {
   const personTotals = useMemo(
-    () => getPersonTotals(data, excludeBots, 15, selectedRepo),
-    [data, excludeBots, selectedRepo]
+    () => getPersonTotals(data, excludeBots, 15, selectedRepo, dateRange, selectedUser),
+    [data, excludeBots, selectedRepo, dateRange, selectedUser]
   );
 
   const stats = useMemo(
-    () => getAverageStats(data, excludeBots, selectedRepo),
-    [data, excludeBots, selectedRepo]
+    () => getAverageStats(data, excludeBots, selectedRepo, dateRange, selectedUser),
+    [data, excludeBots, selectedRepo, dateRange, selectedUser]
   );
 
   const prMergedData = useMemo(
-    () => getPRMergedByPerson(data, excludeBots, 15, selectedRepo),
-    [data, excludeBots, selectedRepo]
+    () => getPRMergedByPerson(data, excludeBots, 15, selectedRepo, dateRange, selectedUser),
+    [data, excludeBots, selectedRepo, dateRange, selectedUser]
   );
 
   const prCreatedData = useMemo(
-    () => getPRCreatedByPerson(data, excludeBots, 15, selectedRepo),
-    [data, excludeBots, selectedRepo]
+    () => getPRCreatedByPerson(data, excludeBots, 15, selectedRepo, dateRange, selectedUser),
+    [data, excludeBots, selectedRepo, dateRange, selectedUser]
   );
 
   const prsByRepoData = useMemo(
-    () => getPRsByRepo(data, selectedRepo),
-    [data, selectedRepo]
+    () => getPRsByRepo(data, selectedRepo, dateRange, selectedUser),
+    [data, selectedRepo, dateRange, selectedUser]
   );
 
   const repoTimeStats = useMemo(
-    () => getRepoTimeStats(data, selectedRepo),
-    [data, selectedRepo]
+    () => getRepoTimeStats(data, selectedRepo, dateRange, selectedUser),
+    [data, selectedRepo, dateRange, selectedUser]
   );
 
+  // Activity over time is NOT filtered by date range (it's the source of that filter)
+  // but IS filtered by user
   const activityOverTime = useMemo(
-    () => getActivityOverTime(data, excludeBots, selectedRepo),
-    [data, excludeBots, selectedRepo]
+    () => getActivityOverTime(data, excludeBots, selectedRepo, selectedUser),
+    [data, excludeBots, selectedRepo, selectedUser]
   );
 
   const dateRangeText = useMemo(() => {
@@ -58,6 +63,21 @@ export function Dashboard({ data, excludeBots, selectedRepo }: DashboardProps) {
     return 'All time';
   }, [data.date_range]);
 
+  const activeFilterText = useMemo(() => {
+    const parts: string[] = [];
+    if (dateRange?.start && dateRange?.end) {
+      parts.push(`${dateRange.start} to ${dateRange.end}`);
+    } else if (dateRange?.start) {
+      parts.push(`from ${dateRange.start}`);
+    } else if (dateRange?.end) {
+      parts.push(`until ${dateRange.end}`);
+    }
+    if (selectedUser) {
+      parts.push(selectedUser);
+    }
+    return parts.length > 0 ? `Filtering: ${parts.join(' | ')}` : null;
+  }, [dateRange, selectedUser]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -66,6 +86,9 @@ export function Dashboard({ data, excludeBots, selectedRepo }: DashboardProps) {
             {data.organization}
           </h1>
           <p className="text-sm text-gray-500">{dateRangeText}</p>
+          {activeFilterText && (
+            <p className="text-sm text-blue-600 font-medium">{activeFilterText}</p>
+          )}
         </div>
       </div>
 
@@ -88,7 +111,11 @@ export function Dashboard({ data, excludeBots, selectedRepo }: DashboardProps) {
         </div>
       </div>
 
-      <ActivityOverTime data={activityOverTime} />
+      <ActivityOverTime
+        data={activityOverTime}
+        dateRange={dateRange}
+        onDateRangeChange={onDateRangeChange}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TotalCommentsByPerson data={personTotals} />

@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import {
   AreaChart,
   Area,
@@ -7,12 +8,16 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  Brush,
+  ReferenceArea,
 } from 'recharts';
-import type { ActivityByDate } from '../types';
+import type { ActivityByDate, FilterDateRange } from '../types';
 import { ChartCard } from './ChartCard';
 
 interface ActivityOverTimeProps {
   data: ActivityByDate[];
+  dateRange: FilterDateRange | null;
+  onDateRangeChange: (range: FilterDateRange | null) => void;
 }
 
 interface TooltipPayload {
@@ -35,7 +40,27 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
   );
 }
 
-export function ActivityOverTime({ data }: ActivityOverTimeProps) {
+export function ActivityOverTime({ data, dateRange, onDateRangeChange }: ActivityOverTimeProps) {
+  const handleBrushChange = useCallback((brushData: { startIndex?: number; endIndex?: number }) => {
+    if (brushData.startIndex === undefined || brushData.endIndex === undefined) {
+      return;
+    }
+
+    // If brush covers the entire range, clear the filter
+    if (brushData.startIndex === 0 && brushData.endIndex === data.length - 1) {
+      onDateRangeChange(null);
+      return;
+    }
+
+    const start = data[brushData.startIndex]?.date ?? null;
+    const end = data[brushData.endIndex]?.date ?? null;
+    onDateRangeChange({ start, end });
+  }, [data, onDateRangeChange]);
+
+  const handleClearFilter = useCallback(() => {
+    onDateRangeChange(null);
+  }, [onDateRangeChange]);
+
   if (!data || data.length === 0) {
     return (
       <ChartCard title="Activity Over Time">
@@ -46,8 +71,35 @@ export function ActivityOverTime({ data }: ActivityOverTimeProps) {
     );
   }
 
+  // Find brush indices from date range
+  let startIndex = 0;
+  let endIndex = data.length - 1;
+  if (dateRange?.start) {
+    const idx = data.findIndex(d => d.date >= dateRange.start!);
+    if (idx !== -1) startIndex = idx;
+  }
+  if (dateRange?.end) {
+    const idx = data.findIndex(d => d.date > dateRange.end!);
+    endIndex = idx === -1 ? data.length - 1 : Math.max(0, idx - 1);
+  }
+
+  const hasActiveFilter = dateRange?.start || dateRange?.end;
+
   return (
     <ChartCard title="Activity Over Time">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs text-gray-500">
+          Drag the handles below the chart to filter by date range
+        </p>
+        {hasActiveFilter && (
+          <button
+            onClick={handleClearFilter}
+            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+          >
+            Clear date filter
+          </button>
+        )}
+      </div>
       <ResponsiveContainer width="100%" height={300}>
         <AreaChart
           data={data}
@@ -64,7 +116,16 @@ export function ActivityOverTime({ data }: ActivityOverTimeProps) {
           />
           <YAxis />
           <Tooltip content={<CustomTooltip />} />
-          <Legend />
+          <Legend verticalAlign="top" height={36} />
+          {hasActiveFilter && (
+            <ReferenceArea
+              x1={dateRange?.start ?? data[0].date}
+              x2={dateRange?.end ?? data[data.length - 1].date}
+              strokeOpacity={0.3}
+              fill="#3b82f6"
+              fillOpacity={0.1}
+            />
+          )}
           <Area
             type="monotone"
             dataKey="created"
@@ -96,6 +157,18 @@ export function ActivityOverTime({ data }: ActivityOverTimeProps) {
             stroke="#f43f5e"
             fill="#f43f5e"
             name="Closed"
+          />
+          <Brush
+            dataKey="date"
+            height={30}
+            stroke="#8884d8"
+            startIndex={startIndex}
+            endIndex={endIndex}
+            onChange={handleBrushChange}
+            tickFormatter={(date: string) => {
+              const d = new Date(date);
+              return `${d.getMonth() + 1}/${d.getDate()}`;
+            }}
           />
         </AreaChart>
       </ResponsiveContainer>
