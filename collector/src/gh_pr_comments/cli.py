@@ -1,5 +1,6 @@
 """Command-line interface for gh-pr-comments."""
 
+import fnmatch
 import json
 import logging
 import sys
@@ -44,6 +45,7 @@ def parse_date(ctx: click.Context, param: click.Parameter, value: str | None) ->
 @click.option("--until", callback=parse_date, help="End date (YYYY-MM-DD)")
 @click.option("--verbose", is_flag=True, help="Enable verbose logging")
 @click.option("--use-gh-cli", is_flag=True, default=False, help="Use gh CLI instead of PyGithub (useful for EMU orgs)")
+@click.option("--ignore-repo", multiple=True, help="Repository pattern to ignore, supports wildcards like '*test*' (can be repeated)")
 def main(
     org: str,
     output: str | None,
@@ -55,6 +57,7 @@ def main(
     until: date | None,
     verbose: bool,
     use_gh_cli: bool,
+    ignore_repo: tuple[str, ...],
 ) -> None:
     """Fetch PR events from a GitHub organization."""
     # Configure logging
@@ -107,6 +110,15 @@ def main(
     if since or until:
         logger.info(f"Date filter: {since or 'start'} to {until or 'now'}")
 
+    # Repository ignore patterns
+    ignore_patterns = list(ignore_repo)
+    if ignore_patterns:
+        logger.info(f"Ignoring repositories matching: {', '.join(ignore_patterns)}")
+
+    def should_ignore_repo(repo_name: str) -> bool:
+        """Check if a repository should be ignored based on patterns."""
+        return any(fnmatch.fnmatch(repo_name, pattern) for pattern in ignore_patterns)
+
     # Build report structure
     report = {
         "organization": org,
@@ -132,6 +144,9 @@ def main(
             data_iterator = fetch_organization_data(client, org, date_filter)
 
         for repo_name, prs in data_iterator:
+            if should_ignore_repo(repo_name):
+                logger.info(f"Skipping ignored repository: {repo_name}")
+                continue
             report["repositories"][repo_name] = prs
             report["generated_at"] = datetime.now(timezone.utc).isoformat()
             save_report()
