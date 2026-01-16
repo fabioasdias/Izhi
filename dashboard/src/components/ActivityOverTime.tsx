@@ -63,19 +63,9 @@ export function ActivityOverTime({ data, dateRange, onDateRangeChange }: Activit
     onDateRangeChange(null);
   }, [onDateRangeChange]);
 
-  if (!data || data.length === 0) {
-    return (
-      <ChartCard title="Activity Over Time">
-        <div className="h-[300px] flex items-center justify-center text-gray-500">
-          No data available
-        </div>
-      </ChartCard>
-    );
-  }
-
   // Find brush indices from date range
   let startIndex = 0;
-  let endIndex = data.length - 1;
+  let endIndex = Math.max(0, (data?.length ?? 1) - 1);
   if (dateRange?.start) {
     const idx = data.findIndex(d => d.date >= dateRange.start!);
     if (idx !== -1) startIndex = idx;

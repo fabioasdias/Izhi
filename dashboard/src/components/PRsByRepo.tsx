@@ -42,17 +42,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
 }
 
 export function PRsByRepo({ data }: PRsByRepoProps) {
-  if (!data || data.length === 0) {
-    return (
-      <ChartCard title="PRs by Repository">
-        <div className="h-[400px] flex items-center justify-center text-gray-500">
-          No data available
-        </div>
-      </ChartCard>
-    );
-  }
-
-  const chartData: ChartData[] = data
+  const chartData: ChartData[] = (data ?? [])
     .slice(0, 15)
     .map(({ repo, counts }) => ({
       repo,

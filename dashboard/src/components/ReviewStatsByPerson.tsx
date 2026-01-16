@@ -35,18 +35,8 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
 }
 
 export function ReviewsByPerson({ data }: ReviewStatsByPersonProps) {
-  if (!data || data.length === 0) {
-    return (
-      <ChartCard title="Reviews by Person">
-        <div className="h-[400px] flex items-center justify-center text-gray-500">
-          No review data available
-        </div>
-      </ChartCard>
-    );
-  }
-
   return (
-    <ChartCard title="Reviews by Person">
+    <ChartCard title="PRs Reviewed by Person">
       <ResponsiveContainer width="100%" height={400}>
         <BarChart
           data={data}

@@ -77,16 +77,6 @@ export function AvgTimeToComment({ data, useMedian }: RepoTimeStatsProps) {
     ? 'Median Time to First Comment by Repo (hours)'
     : 'Avg Time to First Comment by Repo (hours)';
 
-  if (filtered.length === 0) {
-    return (
-      <ChartCard title={title}>
-        <div className="h-[400px] flex items-center justify-center text-gray-500">
-          No data available
-        </div>
-      </ChartCard>
-    );
-  }
-
   return (
     <ChartCard title={title}>
       <ResponsiveContainer width="100%" height={400}>
@@ -141,16 +131,6 @@ export function AvgTimeToClose({ data, useMedian }: RepoTimeStatsProps) {
   const title = useMedian
     ? 'Median Time to Close by Repo (hours)'
     : 'Avg Time to Close by Repo (hours)';
-
-  if (filtered.length === 0) {
-    return (
-      <ChartCard title={title}>
-        <div className="h-[400px] flex items-center justify-center text-gray-500">
-          No data available
-        </div>
-      </ChartCard>
-    );
-  }
 
   return (
     <ChartCard title={title}>
