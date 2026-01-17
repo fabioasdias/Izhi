@@ -38,3 +38,7 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Built dashboard in Python package
+collector/src/gh_pr_comments/dashboard/*
+!collector/src/gh_pr_comments/dashboard/.gitkeep

@@ -4,10 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "izhi"
-version = "0.6.1"
+version = "0.7.0"
 description = "Analyze PR comments across a GitHub organization"
 readme = "README.md"
+license = "MIT"
+authors = [{ name = "Fabio" }]
 requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
 dependencies = [
     "PyGithub>=2.1.0",
     "click>=8.0.0",
@@ -22,6 +29,13 @@ dev = [
 
 [project.scripts]
 izhi = "gh_pr_comments.cli:main"
+mikan = "gh_pr_comments.serve:main"
+
+[project.urls]
+Repository = "https://github.com/fabioasdias/Izhi"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+gh_pr_comments = ["dashboard/**/*"]
